@@ -20,6 +20,31 @@ def detect_file_type(df):
         return "DPV"
     return "Unknown"
 
+def parse_scan_range(scan_range, available_scans):
+    if scan_range.lower() == "all":
+        return available_scans
+
+    selected_scans = set()
+
+    try:
+        for part in scan_range.split(","):
+            part = part.strip()
+            if "-" in part:
+                start, end = map(int, part.split("-"))
+                selected_scans.update(range(start, end + 1))
+            else:
+                selected_scans.add(int(part))
+    except ValueError:
+        st.error("Invalid scan range format. Use format like '1-3,5' or 'all'.")
+
+    selected_scans = sorted(set(selected_scans) & set(available_scans))
+
+    # ✅ Debug Output: Check if parsed selection matches available scans
+    st.write(f"Parsed scan range: {selected_scans}")
+
+    return selected_scans
+
+
 # ✅ Function to process CV files
 def process_cv(df, filename, scan_range="all", num_files=1, file_index=0):
     fig = go.Figure()
@@ -28,10 +53,23 @@ def process_cv(df, filename, scan_range="all", num_files=1, file_index=0):
 
     df['WE(1).Current (A)'] *= 1e6  # Convert A to µA
     scans = df['Scan'].unique() if "Scan" in df.columns else [1]
-    
-    for scan in scans:
-        x = df[df['Scan'] == scan]['WE(1).Potential (V)']
-        y = df[df['Scan'] == scan]['WE(1).Current (A)']
+
+    # ✅ Debug: Print detected scan numbers
+    st.write(f"Detected Scans in {filename}: {scans}")
+
+    # ✅ Parse scan range
+    selected_scans = parse_scan_range(scan_range, scans)
+    st.write(f"Selected Scans: {selected_scans}")  # ✅ Debug Output
+
+    for scan in selected_scans:
+        scan_df = df[df['Scan'] == scan]
+
+        if scan_df.empty:
+            st.write(f"Warning: No data found for scan {scan} in {filename}")
+            continue
+
+        x = scan_df['WE(1).Potential (V)']
+        y = scan_df['WE(1).Current (A)']
         scan_color = next(color_cycle) if num_files == 1 else file_colors[file_index]
 
         fig.add_trace(go.Scatter(
@@ -42,13 +80,13 @@ def process_cv(df, filename, scan_range="all", num_files=1, file_index=0):
         ))
 
     fig.update_layout(
-        title="Cyclic Voltammetry (CV) Plot",
-        xaxis=dict(title="Potential (V)", showline=True, showgrid=True),
-        yaxis=dict(title="Current (µA)", showline=True, showgrid=True),
-        hovermode="x unified"
+        title={"text": f"Cyclic Voltammetry (CV) - {filename}", "x": 0.5, "font": {"size": 20}},
+        xaxis={"title": {"text": "Potential (V)", "font": {"size": 16}}},
+        yaxis={"title": {"text": "Current (µA)", "font": {"size": 16}}}
     )
-    
+
     return fig
+
 
 # ✅ Function to process DPV files
 def process_dpv(df, filename):
@@ -71,6 +109,9 @@ def process_dpv(df, filename):
 
     return fig
 
+if "zoom_state" not in st.session_state:
+    st.session_state.zoom_state = {}  # Store only zoom-related data
+
 # ✅ Process Files When Button is Clicked
 if uploaded_files:
     if st.button("Process"):
@@ -78,18 +119,36 @@ if uploaded_files:
         num_files = len(uploaded_files)
 
         for file_index, file in enumerate(uploaded_files):
-            df = pd.read_csv(file, delimiter=';', encoding='utf-8')
-            file_type = detect_file_type(df)
+            try:
+                df = pd.read_csv(file, delimiter=';', encoding='utf-8')
+                file_type = detect_file_type(df)
 
-            if file_type == "CV":
-                fig = process_cv(df, file.name, scan_range, num_files, file_index)
-            elif file_type == "DPV":
-                fig = process_dpv(df, file.name)
-            else:
-                st.error(f"Skipping {file.name}: Unknown file format.")
+                if file_type == "CV":
+                    fig = process_cv(df, file.name, scan_range, num_files, file_index)
+                elif file_type == "DPV":
+                    fig = process_dpv(df, file.name)
+                else:
+                    st.error(f"Skipping {file.name}: Unknown file format.")
+                    continue
+
+                for trace in fig.data:
+                    combined_fig.add_trace(trace)
+
+            except Exception as e:
+                st.error(f"Error processing {file.name}: {e}")
                 continue
 
-            for trace in fig.data:
-                combined_fig.add_trace(trace)
+        # Forcefully ensure title and axis labels exist in layout
+        combined_fig.update_layout(
+            title={"text": "Combined Voltammetry Plot", "x": 0.5, "font": {"size": 20}},
+            xaxis={"title": {"text": "Potential (V)", "font": {"size": 16}}},
+            yaxis={"title": {"text": "Current (µA)", "font": {"size": 16}}}
+        )
 
+        # Debugging: Print the updated figure JSON
+        #st.write("Updated Figure JSON:")
+        #st.json(combined_fig.to_dict())
+
+
+        # ✅ Display the plot
         st.plotly_chart(combined_fig, use_container_width=True, config={"scrollZoom": True})
