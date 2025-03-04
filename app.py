@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import itertools
+import zipfile
+import io
 
 plot_height = 2500
 
@@ -68,6 +70,60 @@ with st.sidebar:
         st.session_state["uploaded_files"] = []  # ✅ Clears uploaded file list
         st.session_state["loaded_data"] = None  # ✅ Clears Loaded Data page content
         st.rerun()  # ✅ Forces Streamlit to refresh
+
+
+    # ✅ Store processed files
+    processed_files = {}
+
+    if st.button("📥 Process & Download All as ZIP"):
+        for file in st.session_state["uploaded_files"]:
+            output_filename = f"processed_{file.name}"
+
+            # ✅ Read the uploaded CSV
+            df = pd.read_csv(file, delimiter=';', encoding='utf-8')
+
+            # ✅ Standard column names expected
+            expected_columns = ["Scan", "WE(1).Potential (V)", "WE(1).Current (A)"]
+
+            # ✅ Check if all required columns exist
+            if not all(col in df.columns for col in expected_columns):
+                st.error(f"Skipping {file.name}: Missing required columns! Found: {df.columns.tolist()}")
+                continue
+
+            # ✅ Process the data
+            scan_dfs = []
+            df["WE(1).Current (A)"] *= 1e6  # Convert A to µA
+
+            for scan in df["Scan"].unique():
+                sub_df = df[df["Scan"] == scan][["WE(1).Potential (V)", "WE(1).Current (A)"]].reset_index(drop=True)
+                sub_df.columns = [f"Potential_{scan}", f"Current_{scan}"]
+                scan_dfs.append(sub_df)
+
+            df_final = pd.concat(scan_dfs, axis=1)
+
+            # ✅ Convert dataframe to CSV and store it
+            csv_data = df_final.to_csv(index=False).encode('utf-8')
+            processed_files[output_filename] = csv_data
+
+        # ✅ Create ZIP archive if files were processed
+        if processed_files:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for filename, data in processed_files.items():
+                    zip_file.writestr(filename, data)
+
+            zip_buffer.seek(0)
+
+            # ✅ Provide a download button for the ZIP
+            st.download_button(
+                label="⬇ Download All Processed Files (ZIP)",
+                data=zip_buffer,
+                file_name="processed_files.zip",
+                mime="application/zip"
+            )
+        else:
+            st.warning("No files were processed. Please check your uploads.")
+
 
     
     # ✅ Instruction Bar at Bottom of Sidebar
@@ -216,4 +272,9 @@ if uploaded_files and process_button:
 
 # ✅ Restore the plot if it exists
 if "stored_figure" in st.session_state and st.session_state["stored_figure"] is not None:
-    st.plotly_chart(st.session_state["stored_figure"], use_container_width=False, config={"scrollZoom": True}, height=plot_height)
+    # ✅ Ensure the plot takes the full available space
+    st.plotly_chart(
+        st.session_state["stored_figure"],
+        use_container_width=True,  # ✅ Auto-resizes to fit available space
+        config={"scrollZoom": True}
+    )
