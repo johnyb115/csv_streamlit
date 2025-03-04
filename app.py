@@ -6,34 +6,78 @@ import itertools
 plot_height = 2500
 
 
+st.set_page_config(layout="wide")
 
-st.set_page_config(layout="wide")  # ✅ Run Streamlit in wide mode
-st.title("Voltammetry Web App")
 
+st.title("Voltammetry CSV plotter")
+
+# ✅ Move all controls into the sidebar
 with st.sidebar:
-    st.header("Upload & Settings")
-    
-    if "uploader_key" not in st.session_state:
-        st.session_state["uploader_key"] = 0  # ✅ Create a unique key for the file uploader
 
-    uploaded_files = st.file_uploader("Upload CV/DPV Files", type=["csv", "txt"], accept_multiple_files=True, key=f"uploader_{st.session_state['uploader_key']}")
+    # ✅ Process Data Button (Green Tint)
+    process_button = st.markdown(
+        """
+        <style>
+        .stButton>button {
+            #background-color: #4CAF50 !important;
+            color: white !important;
+            width: 100%;
+            font-size: 16px;
+            padding: 10px;
+        }
+        </style>
+        """, unsafe_allow_html=True
+    )
+    process_button = st.button("Process Data")
+
+    # ✅ Clear Files Button (Below)
+    clear_button = st.button("🗑️ Clear Files")
+
+
+    st.header("Upload & Settings")
+
+    if "uploader_key" not in st.session_state:
+        st.session_state["uploader_key"] = 0
+
+    if "uploaded_files" not in st.session_state:
+        st.session_state["uploaded_files"] = []
+
+    uploaded_files = st.file_uploader(
+        "Upload CV/DPV Files", type=["csv", "txt"], accept_multiple_files=True, 
+        key=f"uploader_{st.session_state['uploader_key']}"
+    )
+
+    # ✅ Store uploaded files in session state
+    if uploaded_files:
+        st.session_state["uploaded_files"] = uploaded_files
+
+    # ✅ Show currently uploaded files (if any)
+    if "uploaded_files" in st.session_state and st.session_state["uploaded_files"]:
+        st.write("### Uploaded Files:")
+        for file in st.session_state["uploaded_files"]:
+            st.write(f"📄 {file.name}")
+
 
 
     scan_range = st.text_input("Scan Range (e.g., '1-3,5' or 'all')", value="all")
 
-    col1, col2 = st.columns([1, 1])  # ✅ Creates two buttons side by side
 
-    with col1:
-        process_button = st.button("Process Data")
+    if clear_button:
+        st.session_state["uploader_key"] += 1  # ✅ Resets the file uploader
+        st.session_state["stored_figure"] = None  # ✅ Clears the plot
+        st.session_state["uploaded_files"] = []  # ✅ Clears uploaded file list
+        st.session_state["loaded_data"] = None  # ✅ Clears Loaded Data page content
+        st.rerun()  # ✅ Forces Streamlit to refresh
+
     
-    with col2:
-        clear_button = st.button("Clear Files")
-
-if clear_button:
-    st.session_state["uploader_key"] += 1  # ✅ Change the key to reset the uploader
-    st.session_state["stored_figure"] = None
-    st.rerun()  # ✅ Force Streamlit to refresh
-
+    # ✅ Instruction Bar at Bottom of Sidebar
+    st.markdown("---")  # Adds a separator
+    st.markdown("### ❓ How to Use:")
+    st.markdown("""
+    1️⃣ **Load your CSV**  
+    2️⃣ **Click Process**  
+    3️⃣ **Enjoy the Interactive Plot, Bitch! 🚀**
+    """)
 
 
 
@@ -161,18 +205,15 @@ if uploaded_files and process_button:
             st.error(f"Error processing {file.name}: {e}")
             continue
 
-    # Forcefully ensure title and axis labels exist in layout
     combined_fig.update_layout(
         title={"text": "Combined Voltammetry Plot", "x": 0.5, "font": {"size": 20}},
         xaxis={"title": {"text": "Potential (V)", "font": {"size": 16}}},
         yaxis={"title": {"text": "Current (µA)", "font": {"size": 16}}}
     )
 
-    # Debugging: Print the updated figure JSON
-    #st.write("Updated Figure JSON:")
-    #st.json(combined_fig.to_dict())
+    # ✅ Store the plot in session state
+    st.session_state["stored_figure"] = combined_fig
 
-
-    # ✅ Display the plot
-    st.plotly_chart(combined_fig, use_container_width=False, config={"scrollZoom": True}, height=plot_height)
-
+# ✅ Restore the plot if it exists
+if "stored_figure" in st.session_state and st.session_state["stored_figure"] is not None:
+    st.plotly_chart(st.session_state["stored_figure"], use_container_width=False, config={"scrollZoom": True}, height=plot_height)
