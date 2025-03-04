@@ -167,7 +167,7 @@ def parse_scan_range(scan_range, available_scans):
 
     return selected_scans
 
-
+#What the hell is happening
 # ✅ Function to process CV files
 def process_cv(df, filename, scan_range="all", num_files=1, file_index=0):
     fig = go.Figure()
