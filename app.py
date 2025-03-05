@@ -16,24 +16,36 @@ st.title("Voltammetry CSV plotter")
 # ✅ Move all controls into the sidebar
 with st.sidebar:
 
-    # ✅ Process Data Button (Green Tint)
-    process_button = st.markdown(
+    # ✅ Ensure Button Text Visibility in Both Themes
+    st.markdown(
         """
         <style>
-        .stButton>button {
-            #background-color: #4CAF50 !important;
-            color: white !important;
+        .stButton > button {
+            color: black !important;  /* Default: Black for light theme */
+            background-color: #4CAF50 !important;  /* Green for Process */
             width: 100%;
             font-size: 16px;
             padding: 10px;
+            border-radius: 8px;
+            border: none;
+        }
+
+        /* ✅ Dark Mode Fix */
+        @media (prefers-color-scheme: dark) {
+            .stButton > button {
+                color: white !important;  /* White for dark theme */
+            }
         }
         </style>
-        """, unsafe_allow_html=True
+        """,
+        unsafe_allow_html=True
     )
-    process_button = st.button("Process Data")
 
-    # ✅ Clear Files Button (Below)
-    clear_button = st.button("🗑️ Clear Files")
+    process_button = st.button("✅ Process Data")
+
+    # ✅ Clear Files Button (Red)
+    clear_button = st.button("🗑️ Clear Files", key="clear_button")
+
 
 
     st.header("Upload & Settings")
